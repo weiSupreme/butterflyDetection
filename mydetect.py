@@ -156,12 +156,14 @@ def analysis_result(result, path, iou_thresh, width, height):
     existed_box_idx = 0
     true_positive_arr = []
     false_negative_arr = []
+    result_cord = []
     for item in result:
         pred_num += 1
         xmin = int(round(item[0] * width))
         ymin = int(round(item[1] * height))
         xmax = int(round(item[2] * width))
         ymax = int(round(item[3] * height))
+        result_cord.append([xmin, ymin, xmax, ymax])
         csv_line_num = -1
         iou_arr = [0] * 50
         iou_idx_arr = [0] * 50
@@ -241,16 +243,16 @@ def analysis_result(result, path, iou_thresh, width, height):
             false_negative_arr.append([xminT, yminT, xmaxT, ymaxT])  # false negative
         flag = 0 
     out.close()
-    return pred_num, gt, tp, true_positive_arr, false_negative_arr
+    return pred_num, gt, tp, result_cord, true_positive_arr, false_negative_arr
 
 
 def draw_img(image_path, image_name, predictions, IoU_thresh):
     img = cv2.imread(image_path+image_name)   
     h, w, c_ = img.shape  
     txt_file = r'butterfly/annotations_txt/' + image_name.rstrip('.jpg')+'.txt'
-    predict_num_tmp_, gt_num_tmp_, true_positive_tmp_, true_positive_array, false_negative_array = analysis_result(predictions, txt_file, IoU_thresh, w, h)
+    predict_num_tmp_, gt_num_tmp_, true_positive_tmp_, result_cordinate, true_positive_array, false_negative_array = analysis_result(predictions, txt_file, IoU_thresh, w, h)
     
-    for item in predictions:
+    for item in result_cordinate:
         if item in true_positive_array:
             cv2.rectangle(img, (item[0], item[1]), (item[2], item[3]), (0, 255, 0), 5)
         else:
@@ -269,10 +271,7 @@ def process_1000(image_1000, detection, w, h):
     if len(prediction_) > 0:
         for item in prediction_:
             for i in range(4):
-                if i % 2 == 1:
-                    item[i] = int(h * (item[i] * 500 + 250) / 1000)
-                else:
-                    item[i] = int(w * (item[i] * 500 + 250) / 1000)
+                item[i] = (item[i] * 500 + 250) / 1000.
         return prediction_
     
     img_top_left = image_1000[0:500, 0:500, :]
@@ -280,10 +279,7 @@ def process_1000(image_1000, detection, w, h):
     if len(prediction_) > 0:
         for item in prediction_:
             for i in range(4):
-                if i % 2 == 1:
-                    item[i] = int(h * (item[i] * 500) / 1000)
-                else:
-                    item[i] = int(w * (item[i] * 500) / 1000)
+                item[i] = (item[i] * 500) / 1000.
         return prediction_
         
     img_top_right = image_1000[0:500, 500:1000, :]
@@ -292,9 +288,9 @@ def process_1000(image_1000, detection, w, h):
         for item in prediction_:
             for i in range(4):
                 if i % 2 == 1:
-                    item[i] = int(h * (item[i] * 500) / 1000)
+                    item[i] = (item[i] * 500) / 1000.
                 else:
-                    item[i] = int(w * (item[i] * 500 + 500) / 1000)
+                    item[i] = (item[i] * 500 + 500) / 1000.
         return prediction_
         
     img_bottom_left = image_1000[500:1000, 0:500, :]
@@ -303,9 +299,9 @@ def process_1000(image_1000, detection, w, h):
         for item in prediction_:
             for i in range(4):
                 if i % 2 == 0:
-                    item[i] = int(w * (item[i] * 500) / 1000)
+                    item[i] = (item[i] * 500) / 1000.
                 else:
-                    item[i] = int(h * (item[i] * 500 + 500) / 1000)
+                    item[i] = (item[i] * 500 + 500) / 1000.
         return prediction_
     
     img_bottom_right = image_1000[500:1000, 500:1000, :]
@@ -313,10 +309,7 @@ def process_1000(image_1000, detection, w, h):
     if len(prediction_) > 0:
         for item in prediction_:
             for i in range(4):
-                if i % 2 == 0:
-                    item[i] = int(w * (item[i] * 500 + 500) / 1000)
-                else:
-                    item[i] = int(h * (item[i] * 500 + 500) / 1000)
+                    item[i] = (item[i] * 500 + 500) / 1000.
         return prediction_
         
     return prediction_
@@ -359,7 +352,7 @@ def main(args):
             
         
         if len(prediction) > 0:
-            print prediction 
+            #print prediction 
             flag = 1
             predict_num_tmp, gt_num_tmp, true_positive_tmp = draw_img(img_path, img_name, prediction, IoU_thresh)
             predict_num += predict_num_tmp
