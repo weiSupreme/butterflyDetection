@@ -11,56 +11,35 @@ import subprocess
 import sys
 
 # Add extra layers on top of a "base" network (e.g. VGGNet or Inception).
-def AddExtraLayers(net, use_batchnorm=True, lr_mult=1):
+def AddExtraLayers(net, use_batchnorm=True):
     use_relu = True
 
     # Add additional convolutional layers.
     # 19 x 19
-    from_layer = net.keys()[-1]
+    last_layer = net.keys()[-1]
 
-    # TODO(weiliu89): Construct the name using the last layer to avoid duplication.
     # 10 x 10
-    out_layer = "conv6_1"
-    ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 256, 1, 0, 1,
-        lr_mult=lr_mult)
-
+    from_layer = last_layer
+    out_layer = "{}/conv1_1".format(last_layer)
+    ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 256, 1, 0, 1)
     from_layer = out_layer
-    out_layer = "conv6_2"
-    ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 512, 3, 1, 2,
-        lr_mult=lr_mult)
 
-    # 5 x 5
+    out_layer = "{}/conv1_2".format(last_layer)
+    ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 512, 3, 1, 2)
     from_layer = out_layer
-    out_layer = "conv7_1"
-    ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 128, 1, 0, 1,
-      lr_mult=lr_mult)
 
-    from_layer = out_layer
-    out_layer = "conv7_2"
-    ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 256, 3, 1, 2,
-      lr_mult=lr_mult)
+    for i in xrange(2, 4):
+      out_layer = "{}/conv{}_1".format(last_layer, i)
+      ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 256, 1, 0, 1)
+      from_layer = out_layer
 
-    # 3 x 3
-    from_layer = out_layer
-    out_layer = "conv8_1"
-    ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 128, 1, 0, 1,
-      lr_mult=lr_mult)
+      out_layer = "{}/conv{}_2".format(last_layer, i)
+      ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 512, 3, 1, 2)
+      from_layer = out_layer
 
-    from_layer = out_layer
-    out_layer = "conv8_2"
-    ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 256, 3, 0, 1,
-      lr_mult=lr_mult)
-
-    # 1 x 1
-    from_layer = out_layer
-    out_layer = "conv9_1"
-    ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 128, 1, 0, 1,
-      lr_mult=lr_mult)
-
-    from_layer = out_layer
-    out_layer = "conv9_2"
-    ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 256, 3, 0, 1,
-      lr_mult=lr_mult)
+    # Add global pooling layer.
+    name = net.keys()[-1]
+    net.pool6 = L.Pooling(net[name], pool=P.Pooling.AVE, global_pooling=True)
 
     return net
 
@@ -78,9 +57,9 @@ resume_training = True
 # If true, Remove old model files.
 remove_old_models = False
 
-# The database file for training data. Created by data/VOC0712/create_data.sh
+# The database file for training data. Created by data/VOC2007/create_data.sh
 train_data = "data/VOCdevkit/VOC2007/lmdb/VOC2007_trainval_lmdb"
-# The database file for testing data. Created by data/VOC0712/create_data.sh
+# The database file for testing data. Created by data/VOC2007/create_data.sh
 test_data = "data/VOCdevkit/VOC2007/lmdb/VOC2007_test_lmdb"
 # Specify the batch sampler.
 resize_width = 500
@@ -225,30 +204,22 @@ test_transform_param = {
                 },
         }
 
-# If true, use batch norm for all newly added layers.
-# Currently only the non batch norm version has been tested.
-use_batchnorm = False
-lr_mult = 1
-# Use different initial learning rate.
-if use_batchnorm:
-    base_lr = 0.0004
-else:
-    # A learning rate for batch_size = 1, num_gpus = 1.
-    base_lr = 0.00004
+# A learning rate for batch_size = 1, num_gpus = 1.
+base_lr = 0.00004
 
 # Modify the job name if you want.
-job_name = "butterfly_{}".format(resize)
+job_name = "resnet{}".format(resize)
 # The name of the model. Modify it if you want.
-model_name = "VGG_butterfly_{}".format(job_name)
+model_name = "ResNet{}".format(job_name)
 
 # Directory which stores the model .prototxt file.
-save_dir = "models/VGGNet/butterfly/{}".format(job_name)
+save_dir = "models/ResNet/VOC2007/{}".format(job_name)
 # Directory which stores the snapshot of models.
-snapshot_dir = "models/VGGNet/butterfly/{}".format(job_name)
+snapshot_dir = "models/ResNet/VOC2007/{}".format(job_name)
 # Directory which stores the job script and log file.
-job_dir = "jobs/VGGNet/butterfly/{}".format(job_name)
+job_dir = "jobs/ResNet/VOC2007/{}".format(job_name)
 # Directory which stores the detection results.
-output_result_dir = "{}/data/VOCdevkit/results/butterfly/{}/Main".format(os.environ['HOME'], job_name)
+output_result_dir = "{}/data/VOCdevkit/results/VOC2007/{}/Main".format(os.environ['HOME'], job_name)
 
 # model definition files.
 train_net_file = "{}/train.prototxt".format(save_dir)
@@ -262,9 +233,8 @@ job_file = "{}/{}.sh".format(job_dir, model_name)
 
 # Stores the test image names and sizes. Created by data/VOC2007/create_list.sh
 name_size_file = "data/VOC2007/test_name_size.txt"
-# The pretrained model. We use the Fully convolutional reduced (atrous) VGGNet.
-#pretrain_model = "models/VGGNet/VGG_ILSVRC_16_layers_fc_reduced.caffemodel"
-pretrain_model = "models/VGGNet/butterfly/0-from-detection.caffemodel"
+# The pretrained ResNet101 model from https://github.com/KaimingHe/deep-residual-networks.
+pretrain_model = "models/ResNet/ResNet-101-model.caffemodel"
 # Stores LabelMapItem.
 label_map_file = "data/VOC2007/labelmap_voc.prototxt"
 
@@ -275,10 +245,9 @@ background_label_id=0
 train_on_diff_gt = True
 normalization_mode = P.Loss.VALID
 code_type = P.PriorBox.CENTER_SIZE
-ignore_cross_boundary_bbox = False
-mining_type = P.MultiBoxLoss.MAX_NEGATIVE
 neg_pos_ratio = 3.
 loc_weight = (neg_pos_ratio + 1.) / 4.
+mining_type = P.MultiBoxLoss.MAX_NEGATIVE
 multibox_loss_param = {
     'loc_loss_type': P.MultiBoxLoss.SMOOTH_L1,
     'conf_loss_type': P.MultiBoxLoss.SOFTMAX,
@@ -294,7 +263,6 @@ multibox_loss_param = {
     'neg_pos_ratio': neg_pos_ratio,
     'neg_overlap': 0.5,
     'code_type': code_type,
-    'ignore_cross_boundary_bbox': ignore_cross_boundary_bbox,
     }
 loss_param = {
     'normalization': normalization_mode,
@@ -303,16 +271,16 @@ loss_param = {
 # parameters for generating priors.
 # minimum dimension of input image
 min_dim = 300
-# conv4_3 ==> 38 x 38
-# fc7 ==> 19 x 19
-# conv6_2 ==> 10 x 10
-# conv7_2 ==> 5 x 5
-# conv8_2 ==> 3 x 3
-# conv9_2 ==> 1 x 1
-mbox_source_layers = ['conv4_3', 'fc7', 'conv6_2', 'conv7_2', 'conv8_2', 'conv9_2']
+# res3b3_relu ==> 38 x 38
+# res5c_relu ==> 19 x 19
+# res5c_relu/conv1_2 ==> 10 x 10
+# res5c_relu/conv2_2 ==> 5 x 5
+# res5c_relu/conv3_2 ==> 3 x 3
+# pool6 ==> 1 x 1
+mbox_source_layers = ['res3b3_relu', 'res5c_relu', 'res5c_relu/conv1_2', 'res5c_relu/conv2_2', 'res5c_relu/conv3_2', 'pool6']
 # in percent %
 min_ratio = 20
-max_ratio = 90
+max_ratio = 95
 step = int(math.floor((max_ratio - min_ratio) / (len(mbox_source_layers) - 2)))
 min_sizes = []
 max_sizes = []
@@ -320,27 +288,24 @@ for ratio in xrange(min_ratio, max_ratio + 1, step):
   min_sizes.append(min_dim * ratio / 100.)
   max_sizes.append(min_dim * (ratio + step) / 100.)
 min_sizes = [min_dim * 10 / 100.] + min_sizes
-max_sizes = [min_dim * 20 / 100.] + max_sizes
-steps = [8, 16, 32, 64, 100, 300]
-aspect_ratios = [[2], [2, 3], [2, 3], [2, 3], [2], [2]]
-# L2 normalize conv4_3.
-normalizations = [20, -1, -1, -1, -1, -1]
+max_sizes = [[]] + max_sizes
+aspect_ratios = [[2], [2, 3], [2, 3], [2, 3], [2, 3], [2, 3]]
 # variance used to encode/decode prior bboxes.
 if code_type == P.PriorBox.CENTER_SIZE:
   prior_variance = [0.1, 0.1, 0.2, 0.2]
 else:
   prior_variance = [0.1]
 flip = True
-clip = False
+clip = True
 
 # Solver parameters.
 # Defining which GPUs to use.
-gpus = "0"
+gpus = "1"
 gpulist = gpus.split(",")
 num_gpus = len(gpulist)
 
 # Divide the mini-batch to different GPUs.
-batch_size = 6
+batch_size = 2
 accum_batch_size = 32
 iter_size = accum_batch_size / batch_size
 solver_mode = P.Solver.CPU
@@ -362,22 +327,20 @@ elif normalization_mode == P.Loss.FULL:
   base_lr *= 2000.
 
 # Evaluate on whole test set.
-num_test_image = 215
-test_batch_size = 8
-# Ideally test_batch_size should be divisible by num_test_image,
-# otherwise mAP will be slightly off the true value.
-test_iter = int(math.ceil(float(num_test_image) / test_batch_size))
+num_test_image = 288
+test_batch_size = 1
+test_iter = num_test_image / test_batch_size
 
 solver_param = {
     # Train parameters
-    'base_lr': 0.0004,
+    'base_lr': 0.001,
     'weight_decay': 0.0005,
-    'lr_policy': "multistep",
-    'stepvalue': [13000, 14500, 15000],
-    'gamma': 0.5,
+    'lr_policy': "step",
+    'stepsize': 9000,
+    'gamma': 0.1,
     'momentum': 0.9,
     'iter_size': iter_size,
-    'max_iter': 15000,
+    'max_iter': 14000,
     'snapshot': 1000,
     'display': 20,
     'average_loss': 10,
@@ -388,11 +351,10 @@ solver_param = {
     'snapshot_after_train': True,
     # Test parameters
     'test_iter': [test_iter],
-    'test_interval': 220,
+    'test_interval': 100,
     'eval_type': "detection",
     'ap_version': "11point",
     'test_initialization': False,
-    #'show_pr_value': True
     }
 
 # parameters for generating detection output.
@@ -439,16 +401,16 @@ net.data, net.label = CreateAnnotatedDataLayer(train_data, batch_size=batch_size
         train=True, output_label=True, label_map_file=label_map_file,
         transform_param=train_transform_param, batch_sampler=batch_sampler)
 
-VGGNetBody(net, from_layer='data', fully_conv=True, reduced=True, dilated=True,
-    dropout=False)
+ResNet101Body(net, from_layer='data', use_pool5=False, use_dilation_conv5=True)
 
-AddExtraLayers(net, use_batchnorm, lr_mult=lr_mult)
+# Use batch norm for the newly added layers.
+AddExtraLayers(net, use_batchnorm=True)
 
+# Don't use batch norm for location/confidence prediction layers.
 mbox_layers = CreateMultiBoxHead(net, data_layer='data', from_layers=mbox_source_layers,
-        use_batchnorm=use_batchnorm, min_sizes=min_sizes, max_sizes=max_sizes,
-        aspect_ratios=aspect_ratios, steps=steps, normalizations=normalizations,
-        num_classes=num_classes, share_location=share_location, flip=flip, clip=clip,
-        prior_variance=prior_variance, kernel_size=3, pad=1, lr_mult=lr_mult)
+        use_batchnorm=False, min_sizes=min_sizes, max_sizes=max_sizes,
+        aspect_ratios=aspect_ratios, num_classes=num_classes, share_location=share_location,
+        flip=flip, clip=clip, prior_variance=prior_variance, kernel_size=3, pad=1)
 
 # Create the MultiBoxLossLayer.
 name = "mbox_loss"
@@ -468,16 +430,16 @@ net.data, net.label = CreateAnnotatedDataLayer(test_data, batch_size=test_batch_
         train=False, output_label=True, label_map_file=label_map_file,
         transform_param=test_transform_param)
 
-VGGNetBody(net, from_layer='data', fully_conv=True, reduced=True, dilated=True,
-    dropout=False)
+ResNet101Body(net, from_layer='data', use_pool5=False, use_dilation_conv5=True)
 
-AddExtraLayers(net, use_batchnorm, lr_mult=lr_mult)
+# Use batch norm for the newly added layers.
+AddExtraLayers(net, use_batchnorm=True)
 
+# Don't use batch norm for location/confidence prediction layers.
 mbox_layers = CreateMultiBoxHead(net, data_layer='data', from_layers=mbox_source_layers,
-        use_batchnorm=use_batchnorm, min_sizes=min_sizes, max_sizes=max_sizes,
-        aspect_ratios=aspect_ratios, steps=steps, normalizations=normalizations,
-        num_classes=num_classes, share_location=share_location, flip=flip, clip=clip,
-        prior_variance=prior_variance, kernel_size=3, pad=1, lr_mult=lr_mult)
+        use_batchnorm=False, min_sizes=min_sizes, max_sizes=max_sizes,
+        aspect_ratios=aspect_ratios, num_classes=num_classes, share_location=share_location,
+        flip=flip, clip=clip, prior_variance=prior_variance, kernel_size=3, pad=1)
 
 conf_name = "mbox_conf"
 if multibox_loss_param["conf_loss_type"] == P.MultiBoxLoss.SOFTMAX:

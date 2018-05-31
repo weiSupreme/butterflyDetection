@@ -151,7 +151,8 @@ def analysis_result(result, path, iou_thresh, width, height):
     
     pred_num = 0
     gt = 0
-    tp = 0   
+    tp = 0
+    class_cnt = 0   
     existed_box = [0] * 50
     existed_box_idx = 0
     true_positive_arr = []
@@ -163,6 +164,7 @@ def analysis_result(result, path, iou_thresh, width, height):
         ymin = int(round(item[1] * height))
         xmax = int(round(item[2] * width))
         ymax = int(round(item[3] * height))
+        bly_name = item[6]
         result_cord.append([xmin, ymin, xmax, ymax])
         csv_line_num = -1
         iou_arr = [0] * 50
@@ -173,6 +175,7 @@ def analysis_result(result, path, iou_thresh, width, height):
         for line in read_txt:
             if csv_line_num == -1:
                 csv_line_num += 1
+                bly_nameT = line.rstrip('\r\n')
                 continue
             line = line.split(' ')
             xminT = (int)(float(line[0]))
@@ -181,7 +184,7 @@ def analysis_result(result, path, iou_thresh, width, height):
             ymaxT = (int)(float(line[3]))
             iou_arr[csv_line_num] = IOU(xmin, ymin, xmax-xmin, ymax-ymin, xminT, yminT, xmaxT-xminT, ymaxT-yminT)
             iou_idx_arr[csv_line_num] = csv_line_num
-            csv_line_num += 1
+            csv_line_num = -1
         #print iou_arr
         for j in range(0, existed_box_idx):
             del_idx = iou_idx_arr.index(existed_box[j])
@@ -196,8 +199,12 @@ def analysis_result(result, path, iou_thresh, width, height):
             existed_box_idx += 1
         if flag == 1:
             true_positive_arr.append([xmin, ymin, xmax, ymax]) #true positive
+            print 'bly_name = ', bly_name
+            print 'bly_nameT = ', bly_nameT
+            if bly_name == bly_nameT:
+                class_cnt += 1
+                print '!!!!!!!!!!!!!!!!!!!!!!!1'
             tp += 1
-
     existed_box = [0] * 50
     existed_box_idx = 0
     csv_line_num = 0
@@ -242,15 +249,16 @@ def analysis_result(result, path, iou_thresh, width, height):
         if flag == 0:
             false_negative_arr.append([xminT, yminT, xmaxT, ymaxT])  # false negative
         flag = 0 
+        csv_line_num = 0
     out.close()
-    return pred_num, gt, tp, result_cord, true_positive_arr, false_negative_arr
+    return pred_num, gt, tp, class_cnt, result_cord, true_positive_arr, false_negative_arr
 
 
 def draw_img(image_path, image_name, predictions, IoU_thresh):
     img = cv2.imread(image_path+image_name)   
     h, w, c_ = img.shape  
-    txt_file = r'butterfly/annotations_txt/' + image_name.rstrip('.jpg')+'.txt'
-    predict_num_tmp_, gt_num_tmp_, true_positive_tmp_, result_cordinate, true_positive_array, false_negative_array = analysis_result(predictions, txt_file, IoU_thresh, w, h)
+    txt_file = r'butterfly/class/annotations_txt_test/' + image_name.rstrip('.jpg')+'.txt'
+    predict_num_tmp_, gt_num_tmp_, true_positive_tmp_, class_cnt_tmp_, result_cordinate, true_positive_array, false_negative_array = analysis_result(predictions, txt_file, IoU_thresh, w, h)
     
     for item in result_cordinate:
         if item in true_positive_array:
@@ -260,9 +268,9 @@ def draw_img(image_path, image_name, predictions, IoU_thresh):
     for item in false_negative_array:
         cv2.rectangle(img, (item[0], item[1]), (item[2], item[3]), (0, 0, 0), 5)
         
-    cv2.imwrite('butterfly/detect_results_com/'+image_name, img)
+    cv2.imwrite('butterfly/class/detect_results/'+image_name, img)
     
-    return predict_num_tmp_, gt_num_tmp_, true_positive_tmp_
+    return predict_num_tmp_, gt_num_tmp_, true_positive_tmp_, class_cnt_tmp_
 
 def process_1000(image_1000, detection, w, h): 
      
@@ -324,9 +332,11 @@ def main(args):
     predict_num = 0
     gt_num = 0
     true_positive = 0
+    class_cnt_num = 0
     predict_num_tmp = 0
     gt_num_tmp = 0
     true_positive_tmp = 0
+    class_cnt_tmp = 0
     IoU_thresh = 0.5
     fail_detection = []
     
@@ -354,26 +364,30 @@ def main(args):
         if len(prediction) > 0:
             #print prediction 
             flag = 1
-            predict_num_tmp, gt_num_tmp, true_positive_tmp = draw_img(img_path, img_name, prediction, IoU_thresh)
+            predict_num_tmp, gt_num_tmp, true_positive_tmp, class_cnt_tmp = draw_img(img_path, img_name, prediction, IoU_thresh)
             predict_num += predict_num_tmp
             gt_num += gt_num_tmp
             true_positive += true_positive_tmp
+            class_cnt_num += class_cnt_tmp
         if not flag:
             fail_detection.append(img_name)
-            predict_num_tmp, gt_num_tmp, true_positive_tmp = draw_img(img_path, img_name, prediction, IoU_thresh)
-            predict_num += predict_num_tmp
+            predict_num_tmp, gt_num_tmp, true_positive_tmp, class_cnt_tmp = draw_img(img_path, img_name, prediction, IoU_thresh)
+            #predict_num += predict_num_tmp
             gt_num += gt_num_tmp
-            true_positive += true_positive_tmp
-          
+            #true_positive += true_positive_tmp
+            #class_cnt_num += class_cnt_tmp
+        #break 
     print 'gt_num = ', gt_num
     print 'predict_num = ', predict_num
     print 'true_positive = ', true_positive
+    print 'class_cnt_num = ', class_cnt_num
     if true_positive:
         P = 1000 * true_positive / predict_num
         R = 1000 * true_positive / gt_num
         print 'precision = ', P / 10.
         print 'recall = ', R / 10.
-        print 'F1 = ', 2 * P * R / (P+R) / 10.
+        print 'detection F1 = ', 2 * P * R / (P+R) / 10.
+        print 'classification accuracy = ', 100 * class_cnt_num / (float(predict_num))
     #print 'ave_fps = ', 109 / time_all
     print 'failed detection: ', fail_detection
 
@@ -381,21 +395,21 @@ VGG16 = 1
 def parse_args():
     '''parse args'''
     parser = argparse.ArgumentParser()
-    parser.add_argument('--gpu_id', type=int, default=0, help='gpu id')
+    parser.add_argument('--gpu_id', type=int, default=1, help='gpu id')
     parser.add_argument('--labelmap_file',
                         default='data/VOC2007/labelmap_voc.prototxt')
     parser.add_argument('--image_resize', default=500, type=int)
-    parser.add_argument('--image_file', default='butterfly/test_images/')
+    parser.add_argument('--image_file', default='butterfly/class/test_images/')
     if VGG16 == 1:
         parser.add_argument('--model_def',
                             default='models/VGGNet/butterfly/butterfly_500x500/deploy.prototxt')
         parser.add_argument('--model_weights',
-                        default='models/VGGNet/butterfly/butterfly_500x500/VGG_butterfly_butterfly_500x500_iter_10000.caffemodel')
+                        default='models/VGGNet/butterfly/butterfly_500x500/VGG_butterfly_butterfly_500x500_iter_11000.caffemodel')
     else:
         parser.add_argument('--model_def',
-                            default='models/VGGNet/butterfly/butterfly_500x500/deploy.prototxt')
+                            default='models/ResNet/VOC2007/resnet500x500/deploy.prototxt')
         parser.add_argument('--model_weights',
-                        default='models/ZFNet/VOC2007/SSDzf_400x400/ZF_VOC2007_SSDzf_400x400_iter_24000.caffemodel')
+                        default='models/ResNet/VOC2007/resnet500x500/ResNetresnet500x500_iter_14000.caffemodel')
     return parser.parse_args()
 
 if __name__ == '__main__':
